@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vastgoed Nieuwsarchief | Orange IM</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --orange: #E85D04;
+      --orange-light: #FFF3ED;
+      --dark: #1a1a2e;
+      --text: #2d2d2d;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --bg: #f9fafb;
+      --white: #ffffff;
+      --radius: 8px;
+    }
+
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* HEADER */
+    header { background: var(--dark); color: white; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+    .logo { font-size: 15px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center; gap: 10px; }
+    .logo span { color: var(--orange); }
+    .header-meta { font-size: 12px; color: #9ca3af; }
+
+    /* LAYOUT */
+    .layout { display: flex; height: calc(100vh - 56px); }
+    .sidebar { width: 268px; min-width: 268px; background: var(--white); border-right: 1px solid var(--border); padding: 16px 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* SIDEBAR SECTIONS */
+    .sidebar-section > .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+    .toggle-all { font-size: 11px; color: var(--orange); cursor: pointer; font-weight: 600; background: none; border: none; padding: 0; }
+    .toggle-all:hover { text-decoration: underline; }
+
+    /* 2-COLUMN CHIP GRID */
+    .chip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 6px; }
+    .chip-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; padding: 4px 0; white-space: nowrap; }
+    .chip-label input[type=checkbox] { accent-color: var(--orange); width: 13px; height: 13px; cursor: pointer; flex-shrink: 0; }
+    .chip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* SEARCH + AUTOCOMPLETE */
+    .search-wrap { position: relative; }
+    .search-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; outline: none; transition: border-color 0.15s; }
+    .search-input:focus { border-color: var(--orange); }
+    .autocomplete-dropdown { position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; max-height: 220px; overflow-y: auto; display: none; }
+    .autocomplete-dropdown.open { display: block; }
+    .ac-item { padding: 8px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--border); line-height: 1.4; }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item.focused { background: var(--orange-light); color: var(--orange); }
+    .ac-item mark { background: none; color: var(--orange); font-weight: 700; }
+    .ac-section { padding: 4px 12px 2px; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; background: var(--bg); border-bottom: 1px solid var(--border); }
+
+    /* DATE + SENDER */
+    .date-inputs { display: flex; flex-direction: column; gap: 5px; }
+    .date-row { display: flex; align-items: center; gap: 6px; }
+    .date-row span { font-size: 11px; font-weight: 600; color: var(--muted); width: 22px; flex-shrink: 0; }
+    .date-inputs input { flex: 1; min-width: 0; padding: 7px 8px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; outline: none; }
+    .date-inputs input:focus { border-color: var(--orange); }
+
+    .btn-reset { width: 100%; padding: 8px; background: none; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; color: var(--muted); cursor: pointer; }
+    .btn-reset:hover { background: var(--bg); }
+
+    /* TOPBAR */
+    .topbar { padding: 10px 20px; background: var(--white); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; }
+    .result-count { font-size: 13px; color: var(--muted); }
+    .result-count strong { color: var(--text); }
+    .topbar-controls { display: flex; align-items: center; gap: 8px; }
+    .select-sm { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; color: var(--text); background: var(--white); cursor: pointer; outline: none; }
+    .lang-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .lang-btn { padding: 5px 10px; font-size: 12px; font-weight: 600; background: var(--white); border: none; cursor: pointer; color: var(--muted); transition: background 0.15s, color 0.15s; }
+    .lang-btn.active { background: var(--orange); color: white; }
+
+    /* ARTICLES */
+    .articles-container { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+    .article-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+    .article-card:hover { border-color: var(--orange); box-shadow: 0 2px 8px rgba(232,93,4,0.08); }
+    .article-card.active { border-color: var(--orange); background: var(--orange-light); }
+    .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+    .card-title { font-size: 14px; font-weight: 600; line-height: 1.4; flex: 1; }
+    .card-date { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
+    .card-meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .card-summary { font-size: 13px; color: #4b5563; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .card-footer { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+
+    /* BADGES */
+    .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .badge-link { margin-left: auto; font-size: 12px; color: var(--orange); text-decoration: none; font-weight: 500; }
+    .badge-link:hover { text-decoration: underline; }
+
+    /* ASSET CLASS COLORS */
+    .ac-kantoren   { background: #dbeafe; color: #1d4ed8; }
+    .ac-retail     { background: #fce7f3; color: #9d174d; }
+    .ac-logistiek  { background: #d1fae5; color: #065f46; }
+    .ac-woningen   { background: #fef3c7; color: #92400e; }
+    .ac-hotels     { background: #ede9fe; color: #5b21b6; }
+    .ac-parkeren   { background: #e0f2fe; color: #075985; }
+    .ac-overig     { background: #f3f4f6; color: #374151; }
+    .dot-kantoren  { background: #3b82f6; }
+    .dot-retail    { background: #ec4899; }
+    .dot-logistiek { background: #10b981; }
+    .dot-woningen  { background: #f59e0b; }
+    .dot-hotels    { background: #8b5cf6; }
+    .dot-parkeren  { background: #0ea5e9; }
+    .dot-overig    { background: #9ca3af; }
+
+    /* CATEGORIE COLORS */
+    .cat-transactie  { background: #d1fae5; color: #065f46; }
+    .cat-overname    { background: #ede9fe; color: #5b21b6; }
+    .cat-huur        { background: #dbeafe; color: #1d4ed8; }
+    .cat-economie    { background: #fef9c3; color: #854d0e; }
+    .cat-technologie { background: #e0f2fe; color: #075985; }
+    .cat-algemeen    { background: #f3f4f6; color: #374151; }
+    .dot-transactie  { background: #10b981; }
+    .dot-overname    { background: #8b5cf6; }
+    .dot-huur        { background: #3b82f6; }
+    .dot-economie    { background: #eab308; }
+    .dot-technologie { background: #0ea5e9; }
+    .dot-algemeen    { background: #9ca3af; }
+
+    /* GEOGRAFIE COLORS */
+    .geo-nederland { background: #fff0e0; color: #c2410c; }
+    .geo-europa    { background: #dbeafe; color: #1d4ed8; }
+    .geo-wereld    { background: #d1fae5; color: #065f46; }
+    .dot-nederland { background: #f97316; }
+    .dot-europa    { background: #3b82f6; }
+    .dot-wereld    { background: #10b981; }
+
+    /* EMPTY */
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: var(--muted); }
+    .empty-state .icon { font-size: 40px; opacity: 0.4; }
+    .empty-state p { font-size: 14px; }
+
+    /* DETAIL PANEL */
+    .detail-panel { width: 420px; min-width: 420px; background: var(--white); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .detail-panel.hidden { display: none; }
+    .detail-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-shrink: 0; }
+    .detail-title { font-size: 15px; font-weight: 700; line-height: 1.4; flex: 1; }
+    .btn-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); line-height: 1; padding: 2px; }
+    .detail-meta { padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .detail-meta-row { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .detail-meta-row strong { color: var(--text); }
+    .detail-tags { padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; }
+    .detail-body { flex: 1; overflow-y: auto; padding: 16px 20px; font-size: 13px; line-height: 1.7; color: #374151; white-space: pre-wrap; }
+    .detail-link { padding: 12px 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .detail-link a { display: inline-flex; align-items: center; gap: 6px; color: var(--orange); font-size: 13px; font-weight: 600; text-decoration: none; }
+    .detail-link a:hover { text-decoration: underline; }
+
+    /* PAGINATION */
+    .pagination { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0; background: var(--white); }
+    .btn-page { padding: 5px 12px; border: 1px solid var(--border); background: var(--white); border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--text); }
+    .btn-page:hover { background: var(--bg); }
+    .btn-page.active { background: var(--orange); border-color: var(--orange); color: white; }
+    .btn-page:disabled { opacity: 0.4; cursor: default; }
+
+    @media (max-width: 900px) { .detail-panel { display: none; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🏢 <span>Orange IM</span> &nbsp;Vastgoed Nieuwsarchief</div>
+  <div class="header-meta" id="last-updated">Laden…</div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="section-head"><span class="section-label">Zoeken</span></div>
+      <div class="search-wrap">
+        <input class="search-input" id="search" type="text" placeholder="Trefwoord…" autocomplete="off" />
+        <div class="autocomplete-dropdown" id="autocomplete"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-head">
+        <span class="section-label">Categorie</span>
+        <button class="toggle-all" data-group="cat-filters">Alles uit</button>
+      </div>
+      <div class="chip-grid" id="cat-filters">
+        <label class="chip-label"><input type="checkbox" value="transactie" checked /><span class="chip-dot dot-transactie"></span>Transactie</label>
+        <label class="chip-label"><input type="checkbox" value="overname" checked /><span class="chip-dot dot-overname"></span>Overname</label>
+        <label class="chip-label"><input type="checkbox" value="huur" checked /><span class="chip-dot dot-huur"></span>Huur</label>
+        <label class="chip-label"><input type="checkbox" value="economie" checked /><span class="chip-dot dot-economie"></span>Economie</label>
+        <label class="chip-label"><input type="checkbox" value="technologie" checked /><span class="chip-dot dot-technologie"></span>Technologie</label>
+        <label class="chip-label"><input type="checkbox" value="algemeen" checked /><span class="chip-dot dot-algemeen"></span>Algemeen</label>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-head">
+        <span class="section-label">Asset Class</span>
+        <button class="toggle-all" data-group="asset-filters">Alles uit</button>
+      </div>
+      <div class="chip-grid" id="asset-filters">
+        <label class="chip-label"><input type="checkbox" value="kantoren" checked /><span class="chip-dot dot-kantoren"></span>Kantoren</label>
+        <label class="chip-label"><input type="checkbox" value="retail" checked /><span class="chip-dot dot-retail"></span>Retail</label>
+        <label class="chip-label"><input type="checkbox" value="logistiek" checked /><span class="chip-dot dot-logistiek"></span>Logistiek</label>
+        <label class="chip-label"><input type="checkbox" value="woningen" checked /><span class="chip-dot dot-woningen"></span>Woningen</label>
+        <label class="chip-label"><input type="checkbox" value="hotels_leisure" checked /><span class="chip-dot dot-hotels"></span>Hotels &amp; Leisure</label>
+        <label class="chip-label"><input type="checkbox" value="parkeren" checked /><span class="chip-dot dot-parkeren"></span>Parkeren</label>
+        <label class="chip-label"><input type="checkbox" value="overig" checked /><span class="chip-dot dot-overig"></span>Overig</label>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-head">
+        <span class="section-label">Geografie</span>
+        <button class="toggle-all" data-group="geo-filters">Alles uit</button>
+      </div>
+      <div class="chip-grid" id="geo-filters">
+        <label class="chip-label"><input type="checkbox" value="nederland" checked /><span class="chip-dot dot-nederland"></span>Nederland</label>
+        <label class="chip-label"><input type="checkbox" value="europa" checked /><span class="chip-dot dot-europa"></span>Europa</label>
+        <label class="chip-label"><input type="checkbox" value="wereld" checked /><span class="chip-dot dot-wereld"></span>Wereld</label>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-head"><span class="section-label">Periode</span></div>
+      <div class="date-inputs">
+        <div class="date-row"><span>Van</span><input type="date" id="date-from" /></div>
+        <div class="date-row"><span>Tot</span><input type="date" id="date-to" /></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-head"><span class="section-label">Bron</span></div>
+      <div class="search-wrap">
+        <input class="search-input" id="sender-filter" type="text" placeholder="Nieuwsbrief / afzender…" autocomplete="off" />
+        <div class="autocomplete-dropdown" id="autocomplete-sender"></div>
+      </div>
+    </div>
+
+    <button class="btn-reset" id="btn-reset">↺ Reset filters</button>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="result-count" id="result-count">Laden…</div>
+      <div class="topbar-controls">
+        <div class="lang-toggle">
+          <button class="lang-btn active" id="lang-nl" onclick="setLang('nl')">🇳🇱 NL</button>
+          <button class="lang-btn" id="lang-orig" onclick="setLang('orig')">Origineel</button>
+        </div>
+        <select class="select-sm" id="sort-order">
+          <option value="desc">Nieuwste eerst</option>
+          <option value="asc">Oudste eerst</option>
+        </select>
+      </div>
+    </div>
+    <div class="articles-container" id="articles-list">
+      <div class="empty-state"><div class="icon">📰</div><p>Laden…</p></div>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <!-- DETAIL PANEL -->
+  <div class="detail-panel hidden" id="detail-panel">
+    <div class="detail-header">
+      <div class="detail-title" id="d-title"></div>
+      <button class="btn-close" id="btn-close">×</button>
+    </div>
+    <div class="detail-meta">
+      <div class="detail-meta-row"><strong>Datum:</strong> <span id="d-date"></span></div>
+      <div class="detail-meta-row"><strong>Bron:</strong> <span id="d-source"></span></div>
+    </div>
+    <div class="detail-tags" id="d-tags"></div>
+    <div class="detail-body" id="d-body"></div>
+    <div class="detail-link" id="d-link"></div>
+  </div>
+
+</div>
+
+<script>
+  const { createClient } = supabase;
+  const sb = createClient(
+    'https://ojjhwbqjphjllqhetndz.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qamh3YnFqcGhqbGxxaGV0bmR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NTYyNTMsImV4cCI6MjA5NzIzMjI1M30.iNOI0dFdwC1C_G-yC7YRUVmSvow03vsZy9_5sVDgDjo'
+  );
+
+  const PAGE_SIZE = 20;
+  let currentPage = 0;
+  let totalCount = 0;
+  let currentLang = 'nl';
+  let currentArticle = null;
+  let debounceTimer, acTimer, senderAcTimer;
+  let acFocusIndex = -1, senderAcFocusIndex = -1;
+
+  const AC_LABELS = {
+    kantoren: 'Kantoren', retail: 'Retail', logistiek: 'Logistiek',
+    woningen: 'Woningen', hotels_leisure: 'Hotels & Leisure',
+    parkeren: 'Parkeren', overig: 'Overig'
+  };
+  const CAT_LABELS = {
+    transactie: 'Transactie', overname: 'Overname', huur: 'Huur',
+    economie: 'Economie', technologie: 'Technologie', algemeen: 'Algemeen'
+  };
+  const CAT_COUNT = 6, AC_COUNT = 7, GEO_COUNT = 3;
+  const GEO_LABELS = { nederland: '🇳🇱 Nederland', europa: '🇪🇺 Europa', wereld: '🌍 Wereld' };
+
+  // ── Taal ───────────────────────────────────────────────────────────────────
+  function setLang(lang) {
+    currentLang = lang;
+    document.getElementById('lang-nl').classList.toggle('active', lang === 'nl');
+    document.getElementById('lang-orig').classList.toggle('active', lang === 'orig');
+    renderArticleList(window._lastArticles || []);
+    if (currentArticle) renderDetailBody(currentArticle);
+  }
+  function titleFor(a)   { return currentLang === 'orig' && a.original_title   ? a.original_title   : (a.title || ''); }
+  function summaryFor(a) { return currentLang === 'orig' && a.original_summary ? a.original_summary : (a.summary || ''); }
+  function bodyFor(a) {
+    if (currentLang === 'orig') return a.full_text || a.original_summary || a.summary || 'Geen tekst beschikbaar.';
+    return a.translated_text || a.summary || 'Geen Nederlandse tekst beschikbaar.';
+  }
+
+  // ── Alles aan/uit ─────────────────────────────────────────────────────────
+  document.querySelectorAll('.toggle-all').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const group = document.getElementById(btn.dataset.group);
+      const boxes = group.querySelectorAll('input[type=checkbox]');
+      const allChecked = [...boxes].every(b => b.checked);
+      boxes.forEach(b => b.checked = !allChecked);
+      btn.textContent = allChecked ? 'Alles aan' : 'Alles uit';
+      loadArticles(0);
+    });
+  });
+  // Update knoptekst als checkboxes handmatig wijzigen
+  function updateToggleLabel(groupId, btnGroupSelector) {
+    const group = document.getElementById(groupId);
+    const btn = document.querySelector(`[data-group="${groupId}"]`);
+    if (!btn) return;
+    const boxes = group.querySelectorAll('input[type=checkbox]');
+    const allChecked = [...boxes].every(b => b.checked);
+    btn.textContent = allChecked ? 'Alles uit' : 'Alles aan';
+  }
+
+  // ── Autocomplete ──────────────────────────────────────────────────────────
+  const acEl = document.getElementById('autocomplete');
+  const searchEl = document.getElementById('search');
+
+  async function fetchSuggestions(q) {
+    if (q.length < 2) { closeAc(); return; }
+
+    // Titel-suggesties
+    const { data: titleData } = await sb
+      .from('articles')
+      .select('id, title')
+      .ilike('title', `%${q}%`)
+      .limit(5);
+
+    // Topic-suggesties (distinct via rpc of simpele query)
+    const { data: topicData } = await sb
+      .from('articles')
+      .select('topics')
+      .not('topics', 'is', null)
+      .limit(50);
+
+    // Extraheer unieke topics die de query bevatten
+    const allTopics = new Set();
+    (topicData || []).forEach(r => (r.topics || []).forEach(t => {
+      if (t.toLowerCase().includes(q.toLowerCase())) allTopics.add(t);
+    }));
+    const matchTopics = [...allTopics].slice(0, 4);
+
+    if (!(titleData?.length) && !matchTopics.length) { closeAc(); return; }
+
+    let html = '';
+    if (matchTopics.length) {
+      html += `<div class="ac-section">Onderwerpen</div>`;
+      matchTopics.forEach(t => {
+        html += `<div class="ac-item" onclick="pickAc('${esc(t)}')">${highlight(t, q)}</div>`;
+      });
+    }
+    if (titleData?.length) {
+      html += `<div class="ac-section">Artikelen</div>`;
+      titleData.forEach(a => {
+        html += `<div class="ac-item" onclick="pickAc('${esc(a.title)}')">${highlight(a.title, q)}</div>`;
+      });
+    }
+
+    acEl.innerHTML = html;
+    acEl.classList.add('open');
+    acFocusIndex = -1;
+  }
+
+  function pickAc(value) {
+    searchEl.value = value;
+    closeAc();
+    loadArticles(0);
+  }
+
+  function closeAc() {
+    acEl.classList.remove('open');
+    acEl.innerHTML = '';
+    acFocusIndex = -1;
+  }
+
+  function highlight(text, q) {
+    const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return esc(text).replace(re, '<mark>$1</mark>');
+  }
+
+  searchEl.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    clearTimeout(acTimer);
+    const q = searchEl.value.trim();
+    debounceTimer = setTimeout(() => loadArticles(0), 400);
+    acTimer = setTimeout(() => fetchSuggestions(q), 250);
+  });
+
+  searchEl.addEventListener('keydown', e => {
+    const items = acEl.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      acFocusIndex = Math.min(acFocusIndex + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('focused', i === acFocusIndex));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      acFocusIndex = Math.max(acFocusIndex - 1, -1);
+      items.forEach((el, i) => el.classList.toggle('focused', i === acFocusIndex));
+    } else if (e.key === 'Enter' && acFocusIndex >= 0) {
+      e.preventDefault();
+      items[acFocusIndex]?.click();
+    } else if (e.key === 'Escape') {
+      closeAc();
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-wrap')) { closeAc(); closeSenderAc(); }
+  });
+
+  // ── Autocomplete BRON ──────────────────────────────────────────────────────
+  const senderAcEl  = document.getElementById('autocomplete-sender');
+  const senderEl    = document.getElementById('sender-filter');
+
+  async function fetchSenderSuggestions(q) {
+    if (q.length < 2) { closeSenderAc(); return; }
+    const { data } = await sb
+      .from('newsletters')
+      .select('sender_name, sender_email')
+      .or(`sender_name.ilike.%${q}%,sender_email.ilike.%${q}%`)
+      .limit(30);
+
+    // Dedupliceer op sender_name
+    const seen = new Set();
+    const unique = (data || []).filter(r => {
+      const key = r.sender_name || r.sender_email;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).slice(0, 7);
+
+    if (!unique.length) { closeSenderAc(); return; }
+
+    senderAcEl.innerHTML = unique.map(r => {
+      const label = r.sender_name || r.sender_email;
+      const sub   = r.sender_name ? r.sender_email : '';
+      return `<div class="ac-item" onclick="pickSenderAc('${esc(label)}')">
+        ${highlight(label, q)}${sub ? `<span style="color:var(--muted);font-size:11px;margin-left:6px">${esc(sub)}</span>` : ''}
+      </div>`;
+    }).join('');
+    senderAcEl.classList.add('open');
+    senderAcFocusIndex = -1;
+  }
+
+  function pickSenderAc(value) {
+    senderEl.value = value;
+    closeSenderAc();
+    loadArticles(0);
+  }
+
+  function closeSenderAc() {
+    senderAcEl.classList.remove('open');
+    senderAcEl.innerHTML = '';
+    senderAcFocusIndex = -1;
+  }
+
+  senderEl.addEventListener('keydown', e => {
+    const items = senderAcEl.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      senderAcFocusIndex = Math.min(senderAcFocusIndex + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('focused', i === senderAcFocusIndex));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      senderAcFocusIndex = Math.max(senderAcFocusIndex - 1, -1);
+      items.forEach((el, i) => el.classList.toggle('focused', i === senderAcFocusIndex));
+    } else if (e.key === 'Enter' && senderAcFocusIndex >= 0) {
+      e.preventDefault();
+      items[senderAcFocusIndex]?.click();
+    } else if (e.key === 'Escape') {
+      closeSenderAc();
+    }
+  });
+
+  // ── Filters ────────────────────────────────────────────────────────────────
+  function getFilters() {
+    return {
+      search:     searchEl.value.trim(),
+      dateFrom:   document.getElementById('date-from').value,
+      dateTo:     document.getElementById('date-to').value,
+      sender:     document.getElementById('sender-filter').value.trim(),
+      checkedAC:  [...document.querySelectorAll('#asset-filters input:checked')].map(el => el.value),
+      checkedCat: [...document.querySelectorAll('#cat-filters input:checked')].map(el => el.value),
+      checkedGeo: [...document.querySelectorAll('#geo-filters input:checked')].map(el => el.value),
+    };
+  }
+
+  // ── Data laden ─────────────────────────────────────────────────────────────
+  async function loadArticles(page = 0) {
+    currentPage = page;
+    const { search, dateFrom, dateTo, sender, checkedAC, checkedCat, checkedGeo } = getFilters();
+    const from = page * PAGE_SIZE, to = from + PAGE_SIZE - 1;
+    const sortAsc = document.getElementById('sort-order').value === 'asc';
+
+    let q = sb
+      .from('articles')
+      .select('id,title,summary,original_title,original_summary,full_text,translated_text,url,category,asset_classes,topics,published_date,created_at,newsletters(subject,sender_name,sender_email)', { count: 'exact' })
+      .order('published_date', { ascending: sortAsc, nullsFirst: false })
+      .order('created_at', { ascending: sortAsc })
+      .range(from, to);
+
+    if (search)                               q = q.textSearch('search_vector', search, { config: 'dutch' });
+    if (checkedAC.length > 0 && checkedAC.length < AC_COUNT)    q = q.overlaps('asset_classes', checkedAC);
+    if (checkedCat.length > 0 && checkedCat.length < CAT_COUNT) q = q.in('category', checkedCat);
+    if (checkedGeo.length > 0 && checkedGeo.length < GEO_COUNT) q = q.in('geography', checkedGeo);
+    if (dateFrom)  q = q.gte('published_date', dateFrom);
+    if (dateTo)    q = q.lte('published_date', dateTo);
+
+    const { data, count, error } = await q;
+    if (error) { console.error(error); showEmpty('Fout bij laden. Probeer opnieuw.'); return; }
+
+    totalCount = count || 0;
+    window._lastArticles = data || [];
+    renderArticleList(data || []);
+    renderPagination();
+    updateCount(totalCount, from, Math.min(to + 1, totalCount));
+    updateLastUpdated(data);
+  }
+
+  // ── Render lijst ───────────────────────────────────────────────────────────
+  function renderArticleList(articles) {
+    const list = document.getElementById('articles-list');
+    if (!articles.length) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>Geen artikelen gevonden voor deze filters.</p></div>';
+      return;
+    }
+    list.innerHTML = articles.map(a => {
+      const date   = a.published_date ? new Date(a.published_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+      const source = a.newsletters ? (a.newsletters.sender_name || a.newsletters.sender_email || '—') : '—';
+      const catBadge = a.category  ? `<span class="badge cat-${a.category}">${CAT_LABELS[a.category] || a.category}</span>` : '';
+      const geoBadge = a.geography ? `<span class="badge geo-${a.geography}">${GEO_LABELS[a.geography] || a.geography}</span>` : '';
+      const acBadges = (a.asset_classes || []).map(ac =>
+        `<span class="badge ac-${ac === 'hotels_leisure' ? 'hotels' : ac}"><span class="badge-dot dot-${ac === 'hotels_leisure' ? 'hotels' : ac}"></span>${AC_LABELS[ac] || ac}</span>`
+      ).join('');
+      const linkBtn = a.url ? `<a class="badge-link" href="${esc(a.url)}" target="_blank" onclick="event.stopPropagation()">Artikel →</a>` : '';
+      return `
+        <div class="article-card" data-id="${a.id}" onclick='openDetail(${JSON.stringify(a)})'>
+          <div class="card-header">
+            <div class="card-title">${esc(titleFor(a))}</div>
+            <div class="card-date">${date}</div>
+          </div>
+          <div class="card-meta">${esc(source)}</div>
+          <div class="card-summary">${esc(summaryFor(a))}</div>
+          <div class="card-footer">${catBadge}${geoBadge}${acBadges}${linkBtn}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Detail ─────────────────────────────────────────────────────────────────
+  function openDetail(article) {
+    currentArticle = article;
+    document.querySelectorAll('.article-card').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.article-card[data-id="${article.id}"]`)?.classList.add('active');
+    document.getElementById('detail-panel').classList.remove('hidden');
+    document.getElementById('d-date').textContent = article.published_date
+      ? new Date(article.published_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+    document.getElementById('d-source').textContent = article.newsletters
+      ? (article.newsletters.sender_name || article.newsletters.sender_email || '—') : '—';
+    const catTag = article.category  ? `<span class="badge cat-${article.category}">${CAT_LABELS[article.category] || article.category}</span>` : '';
+    const geoTag = article.geography ? `<span class="badge geo-${article.geography}">${GEO_LABELS[article.geography] || article.geography}</span>` : '';
+    const acTags = (article.asset_classes || []).map(ac =>
+      `<span class="badge ac-${ac === 'hotels_leisure' ? 'hotels' : ac}">${AC_LABELS[ac] || ac}</span>`).join('');
+    const topicTags = (article.topics || []).map(t => `<span class="badge ac-overig">${esc(t)}</span>`).join('');
+    document.getElementById('d-tags').innerHTML = catTag + geoTag + acTags + topicTags;
+    document.getElementById('d-link').innerHTML = article.url
+      ? `<a href="${esc(article.url)}" target="_blank">🔗 Origineel artikel openen</a>` : '';
+    renderDetailBody(article);
+  }
+
+  function renderDetailBody(article) {
+    document.getElementById('d-title').textContent = titleFor(article);
+    document.getElementById('d-body').textContent  = bodyFor(article);
+  }
+
+  // ── Hulpfuncties ───────────────────────────────────────────────────────────
+  function renderPagination() {
+    const total = Math.ceil(totalCount / PAGE_SIZE);
+    const el = document.getElementById('pagination');
+    if (total <= 1) { el.innerHTML = ''; return; }
+    const start = Math.max(0, currentPage - 2), end = Math.min(total - 1, currentPage + 2);
+    const pages = [`<button class="btn-page" ${currentPage === 0 ? 'disabled' : ''} onclick="loadArticles(${currentPage - 1})">‹</button>`];
+    for (let i = start; i <= end; i++)
+      pages.push(`<button class="btn-page ${i === currentPage ? 'active' : ''}" onclick="loadArticles(${i})">${i + 1}</button>`);
+    pages.push(`<button class="btn-page" ${currentPage >= total - 1 ? 'disabled' : ''} onclick="loadArticles(${currentPage + 1})">›</button>`);
+    el.innerHTML = pages.join('');
+  }
+
+  function updateCount(total, from, to) {
+    document.getElementById('result-count').innerHTML = total === 0 ? 'Geen resultaten'
+      : `<strong>${from + 1}–${to}</strong> van <strong>${total.toLocaleString('nl-NL')}</strong> artikelen`;
+  }
+
+  function updateLastUpdated(articles) {
+    const el = document.getElementById('last-updated');
+    el.textContent = articles?.length
+      ? 'Laatste update: ' + new Date(articles[0].created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '';
+  }
+
+  function showEmpty(msg) {
+    document.getElementById('articles-list').innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${msg}</p></div>`;
+    document.getElementById('result-count').textContent = '';
+  }
+
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Events ─────────────────────────────────────────────────────────────────
+  senderEl.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    clearTimeout(senderAcTimer);
+    debounceTimer  = setTimeout(() => loadArticles(0), 400);
+    senderAcTimer  = setTimeout(() => fetchSenderSuggestions(senderEl.value.trim()), 250);
+  });
+  document.getElementById('date-from').addEventListener('change', () => loadArticles(0));
+  document.getElementById('date-to').addEventListener('change', () => loadArticles(0));
+  document.getElementById('sort-order').addEventListener('change', () => loadArticles(0));
+  document.querySelectorAll('#asset-filters input, #cat-filters input, #geo-filters input').forEach(el => {
+    el.addEventListener('change', () => {
+      updateToggleLabel('cat-filters');
+      updateToggleLabel('asset-filters');
+      updateToggleLabel('geo-filters');
+      loadArticles(0);
+    });
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    searchEl.value = '';
+    document.getElementById('sender-filter').value = '';
+    document.getElementById('date-from').value = '';
+    document.getElementById('date-to').value = '';
+    document.getElementById('sort-order').value = 'desc';
+    document.querySelectorAll('#asset-filters input, #cat-filters input').forEach(el => el.checked = true);
+    document.querySelectorAll('.toggle-all').forEach(b => b.textContent = 'Alles uit');
+    closeAc(); closeSenderAc();
+    setLang('nl');
+    loadArticles(0);
+  });
+
+  document.getElementById('btn-close').addEventListener('click', () => {
+    document.getElementById('detail-panel').classList.add('hidden');
+    document.querySelectorAll('.article-card').forEach(c => c.classList.remove('active'));
+    currentArticle = null;
+  });
+
+  loadArticles(0);
+</script>
+</body>
+</html>
